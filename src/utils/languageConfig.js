@@ -15,7 +15,7 @@ export const LANGUAGES = {
   lua: { id: 64, name: 'Lua', monacoLang: 'lua', icon: '', template: `-- your code goes here\n` },
   scala: { id: 81, name: 'Scala', monacoLang: 'scala', icon: '', template: `import java.util.Scanner\n\nobject Main {\n  def main(args: Array[String]): Unit = {\n    // your code goes here\n  }\n}\n` },
   haskell: { id: 61, name: 'Haskell', monacoLang: 'haskell', icon: '', template: `import Data.List\n\nmain :: IO ()\nmain = do\n    -- your code goes here\n    return ()\n` },
-  sql: { id: 82, name: 'SQL', monacoLang: 'sql', icon: '', template: `-- your SQL goes here\n` },
+  sql: { id: 82, name: 'SQLite (SQL)', monacoLang: 'sql', icon: '', template: `-- Note: The compiler uses SQLite. Standard SQL statements apply.\n\nCREATE TABLE test_users (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name TEXT NOT NULL,\n    age INTEGER\n);\n\nINSERT INTO test_users (name, age) VALUES ('Alice', 25), ('Bob', 30);\n\nSELECT * FROM test_users;\n` },
   bash: { id: 46, name: 'Bash', monacoLang: 'shell', icon: '', template: `#!/bin/bash\n\n# your code goes here\n` },
 };
 

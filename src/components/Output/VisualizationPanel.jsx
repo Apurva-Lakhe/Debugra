@@ -94,7 +94,7 @@ const VisualizationPanel = ({ data }) => {
         {/* Explanation */}
         <div className="bg-indigo-900/20 border border-indigo-800/50 rounded-md p-4 text-indigo-200">
           <p className="font-medium text-indigo-400 mb-1 text-xs uppercase tracking-wider flex items-center gap-2">
-            💡 What's happening
+            ✦ What's happening
           </p>
           <p className="text-sm leading-relaxed">{step.explanation}</p>
         </div>

@@ -9,8 +9,11 @@ A professional online code editor and social study room with real-time collabora
 - **Monaco Editor** — High-performance editing experience with syntax highlighting, autocomplete, bracket matching, and code formatting
 - **AI Time-Travel Debugger** — Visual, step-by-step memory and algorithm visualization, error explanations, one-click fixes, and test case generation (powered by Groq's fast Llama 3.3 70B model)
 - **Real-Time Collaboration** — Create rooms, share a room ID, and code together with live sync of code and input streams via Firebase
+- **Advanced Access Control & Presence** — Manage room edit permissions with an interactive dropdown for incoming requests, displaying authentic user names instead of "Guest".
+- **Live User Tracking** — A clickable footer status bar that reveals a real-time list of all connected members in the room.
 - **Team Chat** — In-editor messaging for collaborators
 - **Saved Code History** — Authenticated users can save their code snippets and access them anytime through a dedicated History Panel sidebar
+- **Clean & Aesthetic UI** — Minimalist, professional interface stripped of generic emojis, prioritizing premium developer-centric aesthetic badges (`✦`, `⟡`) and language icons.
 - **User Input (stdin)** — Auto-detects input functions (`input()`, `Scanner`, `cin`, etc.) and seamlessly syncs stdin across all users in a room
 
 ## Tech Stack
@@ -158,7 +161,7 @@ Then rebuild and redeploy the frontend.
 
 ## Supported Languages
 
-Python, JavaScript, TypeScript, Java, C++, C, C#, Go, Rust, Ruby, PHP, Swift, Perl, Lua, Scala, Haskell, SQL, Bash
+Python, JavaScript, TypeScript, Java, C++, C, C#, Go, Rust, Ruby, PHP, Swift, Perl, Lua, Scala, Haskell, SQLite (SQL), Bash
 
 ## Team
 

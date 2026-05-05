@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { doc, setDoc, onSnapshot, updateDoc, serverTimestamp, collection, addDoc, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc, serverTimestamp, collection, addDoc, getDocs, query, orderBy, deleteDoc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../../services/firebase';
 import { executeCode, explainError, fixCode, explainLogic, generateTestCases, visualizeExecution } from '../../services/api';
@@ -97,6 +97,8 @@ export default function EditorPage({ user }) {
   const [joinId, setJoinId] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [mobileTab, setMobileTab] = useState('code'); // 'code' | 'output' | 'chat' | 'saved'
+  const [showOnlineDropdown, setShowOnlineDropdown] = useState(false);
+  const [showRequestsDropdown, setShowRequestsDropdown] = useState(false);
 
   // Detect mobile
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -172,7 +174,7 @@ export default function EditorPage({ user }) {
     const id = crypto.randomUUID().slice(0, 8);
     await setDoc(doc(db, 'rooms', id), {
       name: `Room ${id}`, createdBy: user.uid, code, language,
-      activeUsers: [{ uid: user.uid, displayName: user.displayName }],
+      activeUsers: [{ uid: user.uid, displayName: user.displayName || user.email?.split('@')[0] || 'Guest' }],
       allowedEditors: [user.uid],
       currentEditor: user.uid,
       editRequests: [],
@@ -183,9 +185,31 @@ export default function EditorPage({ user }) {
     navigator.clipboard.writeText(id);
   };
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async () => {
     if (!user) { setShowAuth(true); return; }
-    if (joinId.trim()) { setRoomId(joinId.trim()); toast.success(`Joined room: ${joinId.trim()}`); setShowJoin(false); setJoinId(''); }
+    if (joinId.trim()) { 
+      const newRoomId = joinId.trim();
+      try {
+        const roomRef = doc(db, 'rooms', newRoomId);
+        const roomSnap = await getDoc(roomRef);
+        if (roomSnap.exists()) {
+          const currentUsers = roomSnap.data().activeUsers || [];
+          if (!currentUsers.some(u => u.uid === user.uid)) {
+            await updateDoc(roomRef, {
+              activeUsers: [...currentUsers, { uid: user.uid, displayName: user.displayName || user.email?.split('@')[0] || 'Guest' }]
+            });
+          }
+          setRoomId(newRoomId); 
+          toast.success(`Joined room: ${newRoomId}`); 
+          setShowJoin(false); 
+          setJoinId(''); 
+        } else {
+          toast.error('Room not found');
+        }
+      } catch (err) {
+        toast.error('Failed to join room');
+      }
+    }
   };
 
   // Access Control Actions
@@ -335,7 +359,7 @@ export default function EditorPage({ user }) {
         code, language, name: FILE_NAMES[language] || 'code.txt',
         createdAt: serverTimestamp(),
       });
-      toast.success('Code saved to cloud! ☁️');
+      toast.success('Code saved to cloud! ✦');
     } catch (err) { toast.error('Save failed'); }
   };
 
@@ -377,7 +401,7 @@ export default function EditorPage({ user }) {
             <>
               <div className="topbar-sep" />
               <span className="topbar-title" style={{ color: '#4ec9b0' }}>
-                🟢 Room: {roomId} ({activeUsers.length} online)
+                ✦ Room: {roomId} ({activeUsers.length} online)
               </span>
               <button className="topbar-link" onClick={() => { navigator.clipboard.writeText(roomId); toast.success('Copied!'); }}>
                 Copy ID
@@ -492,16 +516,28 @@ export default function EditorPage({ user }) {
 
             {/* Access Control UI */}
             {roomId && (
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', overflowX: 'auto', whiteSpace: 'nowrap', maxWidth: '60vw', paddingBottom: '2px' }} className="hide-scrollbar">
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', overflow: 'visible', whiteSpace: 'nowrap', maxWidth: '60vw', paddingBottom: '2px' }}>
                 {isAuthor && roomData?.editRequests?.length > 0 && (
-                  <div style={{ display: 'flex', gap: '6px', marginRight: '8px', paddingRight: '8px', borderRight: '1px solid var(--border)' }}>
-                    {roomData.editRequests.map(req => (
-                      <div key={req.uid} style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-3)', padding: '2px 6px', borderRadius: '4px', gap: '6px' }}>
-                        <span style={{ color: 'var(--yellow)' }}>{req.displayName} requests edit</span>
-                        <button onClick={() => handleApproveAccess(req.uid)} style={{ color: '#3fb950', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Approve">✓</button>
-                        <button onClick={() => handleDenyAccess(req.uid)} style={{ color: '#f44747', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Deny">✕</button>
+                  <div style={{ position: 'relative', marginRight: '8px', paddingRight: '8px', borderRight: '1px solid var(--border)' }}>
+                    <button 
+                      onClick={() => setShowRequestsDropdown(!showRequestsDropdown)}
+                      style={{ background: 'var(--bg-3)', color: 'var(--yellow)', border: '1px solid var(--border)', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem' }}
+                    >
+                      Requests ({roomData.editRequests.length}) <span style={{ transform: showRequestsDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▾</span>
+                    </button>
+                    {showRequestsDropdown && (
+                      <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '4px', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '160px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
+                        {roomData.editRequests.map(req => (
+                          <div key={req.uid} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px', background: 'var(--bg-2)', borderRadius: '3px' }}>
+                            <span style={{ color: 'var(--text-0)' }}>{req.displayName}</span>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button onClick={() => handleApproveAccess(req.uid)} style={{ color: '#3fb950', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '0.8rem' }} title="Approve">✓</button>
+                              <button onClick={() => handleDenyAccess(req.uid)} style={{ color: '#f44747', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '0.8rem' }} title="Deny">✕</button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
 
@@ -624,7 +660,7 @@ export default function EditorPage({ user }) {
                 />
                 {needsInput && !stdinValue.trim() && (
                   <p style={{ fontSize: '0.65rem', color: '#f44747', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    ⚠ Your code requires input — enter values above before running
+                    ✦ Your code requires input — enter values above before running
                   </p>
                 )}
               </div>
@@ -648,7 +684,7 @@ export default function EditorPage({ user }) {
             {stderr && (
               <button className={`output-tab ${activeOutputTab === 'stderr' ? 'active' : ''}`}
                 onClick={() => setActiveOutputTab('stderr')}>
-                <span style={{ color: activeOutputTab === 'stderr' ? '#f44747' : undefined }}>⚠ Errors</span>
+                <span style={{ color: activeOutputTab === 'stderr' ? '#f44747' : undefined }}>✦ Errors</span>
               </button>
             )}
             {(aiResponse || isAILoading) && (
@@ -709,7 +745,7 @@ export default function EditorPage({ user }) {
                   {aiResponse.steps && Array.isArray(aiResponse.steps) && (
                     <div style={{ marginBottom: '10px' }}>
                       <div className="ai-card-label" style={{ color: 'var(--accent)', marginBottom: '8px', fontSize: '0.7rem' }}>
-                        ▶ Execution Trace ({aiResponse.steps.length} steps)
+                        ⟡ Execution Trace ({aiResponse.steps.length} steps)
                       </div>
                       {aiResponse.steps.map((step, i) => {
                         // Handle both string steps and object steps
@@ -770,7 +806,7 @@ export default function EditorPage({ user }) {
                   )}
                   {aiResponse.bestPractice && (
                     <div className="ai-card" style={{ borderColor: 'rgba(220,220,170,0.3)' }}>
-                      <div className="ai-card-label" style={{ color: 'var(--yellow)' }}>💡 Best Practice</div>
+                      <div className="ai-card-label" style={{ color: 'var(--yellow)' }}>✦ Best Practice</div>
                       <div className="ai-card-content">{aiResponse.bestPractice}</div>
                     </div>
                   )}
@@ -829,10 +865,30 @@ export default function EditorPage({ user }) {
           <span>Spaces: 4</span>
         </div>
         <div className="statusbar-right">
-          {roomId && <span style={{ color: '#4ec9b0' }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            {activeUsers.length} online
-          </span>}
+          {roomId && (
+            <div style={{ position: 'relative' }}>
+              <span 
+                style={{ color: '#4ec9b0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                onClick={() => setShowOnlineDropdown(!showOnlineDropdown)}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                {activeUsers.length} online
+              </span>
+              {showOnlineDropdown && (
+                <div style={{ position: 'absolute', bottom: '100%', right: 0, marginBottom: '8px', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: '4px', padding: '4px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '140px', boxShadow: '0 -4px 12px rgba(0,0,0,0.5)' }}>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-2)', padding: '4px 6px', borderBottom: '1px solid var(--border)', marginBottom: '2px' }}>
+                    Connected Users
+                  </div>
+                  {activeUsers.map(u => (
+                    <div key={u.uid} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 6px', fontSize: '0.75rem', color: 'var(--text-0)', borderRadius: '3px' }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ec9b0' }}></span>
+                      {u.displayName} {u.uid === user?.uid ? '(You)' : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <span>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             Wandbox

@@ -59,7 +59,7 @@ export default function ProblemPanel() {
               <div><span style={{ color: '#10b981' }}>Output:</span> <span style={{ color: 'var(--text-secondary)' }}>{ex.output}</span></div>
             </div>
             {ex.explanation && (
-              <div className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>💡 {ex.explanation}</div>
+              <div className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>✦ {ex.explanation}</div>
             )}
           </div>
         ))}
@@ -67,7 +67,7 @@ export default function ProblemPanel() {
         {/* Constraints */}
         <div className="mt-4">
           <div className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: 'var(--text-primary)' }}>
-            ⚠️ Constraints
+            ✦ Constraints
           </div>
           <ul className="space-y-1">
             {problem.constraints.map((c, i) => (

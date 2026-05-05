@@ -47,9 +47,9 @@ export default function HistoryPanel({ user, onLoadCode, onClose }) {
   };
 
   const LANG_ICONS = {
-    python: '🐍', javascript: '📜', typescript: '🔷', java: '☕',
-    cpp: '⚡', c: '🔧', csharp: '🎯', go: '🐹', rust: '🦀',
-    ruby: '💎', php: '🐘', swift: '🕊️', bash: '🖥️',
+    python: 'PY', javascript: 'JS', typescript: 'TS', java: 'JAVA',
+    cpp: 'C++', c: 'C', csharp: 'C#', go: 'GO', rust: 'RS',
+    ruby: 'RB', php: 'PHP', swift: 'SW', bash: 'SH', sql: 'SQL',
   };
 
   return (
@@ -97,7 +97,7 @@ export default function HistoryPanel({ user, onLoadCode, onClose }) {
             <div key={item.id} className="history-item">
               <div className="history-item-top">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: '0.85rem' }}>{LANG_ICONS[item.language] || '📄'}</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--accent)', background: 'var(--bg-2)', padding: '2px 4px', borderRadius: '4px' }}>{LANG_ICONS[item.language] || 'CODE'}</span>
                   <span className="history-item-name">{item.name || 'untitled'}</span>
                 </div>
                 <span className="history-item-time">{formatDate(item.createdAt)}</span>

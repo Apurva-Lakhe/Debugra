@@ -38,6 +38,7 @@ import EditorStatusBar from './EditorStatusBar';
 import MobileBottomNav from './MobileBottomNav';
 import VideoCall from './VideoCall';
 import VotePopup from './VotePopup';
+import KeyboardShortcutsModal from './KeyboardShortcutsModal';
 import { getSessionApiKey, isSecureApiKeyStored } from '../../services/secureApiKeyStore';
 
 function getApiKeyStatus() {
@@ -827,6 +828,7 @@ export default function EditorPage({ user }) {
       </div>
 
       {/* ===== MAIN SPLIT ===== */}
+            <KeyboardShortcutsModal />
       <div className="main-split">
         {/* EDITOR PANE */}
         <div

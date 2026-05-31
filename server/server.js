@@ -304,7 +304,7 @@ app.use(memoryTracker);
 // ──────────────────────────────────────────────
 // Routes
 // ──────────────────────────────────────────────
-app.use('/api/execute', executeLimiter, executeRoutes);
+app.use('/api/execute', executeRoutes);
 app.use('/api/ai', aiLimiter, aiRoutes);
 app.use('/api/admin/memory-profile', memoryRoutes);
 app.use('/api/webhooks', webhookRoutes);

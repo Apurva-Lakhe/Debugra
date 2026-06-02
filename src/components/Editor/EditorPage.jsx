@@ -79,35 +79,36 @@ export default function EditorPage({ user }) {
   const navigate = useNavigate();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
+  const providerRegisteredRef = useRef(false);
 
   // ─── UI State ──────────────────────────────────────────────────────────────
   const [copied, setCopied] = useState(false);
-const [showAuth, setShowAuth] = useState(false);
-const [authMode, setAuthMode] = useState('login');
-const [showHistory, setShowHistory] = useState(false);
-const [chatOpen, setChatOpen] = useState(false);
-const [showApiKey, setShowApiKey] = useState(false);
-const [showAccount, setShowAccount] = useState(false);
-const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
-const [apiKeyStatus, setApiKeyStatus] = useState(getApiKeyStatus);
-const [mobileTab, setMobileTab] = useState(MOBILE_TABS.CODE);
-const [showJoin, setShowJoin] = useState(false);
-const [joinId, setJoinId] = useState('');
-const [joinPassword, setJoinPassword] = useState('');
-const [roomPassword, setRoomPassword] = useState('');
-const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
-const [outputWidth, setOutputWidth] = useState(420);
-const [minimapSide, setMinimapSide] = useState('right');
-const [showSettings, setShowSettings] = useState(false);
-const [showVideoCall, setShowVideoCall] = useState(false);
-const [showVoiceCall, setShowVoiceCall] = useState(false);
-const [blurIntensity, setBlurIntensity] = useState(10);
-const [showDebugOverlay, setShowDebugOverlay] = useState(false);
-const [showSearchReplace, setShowSearchReplace] = useState(false);
-const [consoleCollapsed, setConsoleCollapsed] = useState(false);
-const [showComplexityOverlay, setShowComplexityOverlay] = useState(false);
-const [drawerOpen, setDrawerOpen] = useState(false);
-const resizingRef = useRef(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [showHistory, setShowHistory] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
+  const [apiKeyStatus, setApiKeyStatus] = useState(getApiKeyStatus);
+  const [mobileTab, setMobileTab] = useState(MOBILE_TABS.CODE);
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinId, setJoinId] = useState('');
+  const [joinPassword, setJoinPassword] = useState('');
+  const [roomPassword, setRoomPassword] = useState('');
+  const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
+  const [outputWidth, setOutputWidth] = useState(420);
+  const [minimapSide, setMinimapSide] = useState('right');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const [blurIntensity, setBlurIntensity] = useState(10);
+  const [showDebugOverlay, setShowDebugOverlay] = useState(false);
+  const [showSearchReplace, setShowSearchReplace] = useState(false);
+  const [consoleCollapsed, setConsoleCollapsed] = useState(false);
+  const [showComplexityOverlay, setShowComplexityOverlay] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const resizingRef = useRef(false);
   const toggleConsoleCollapsed = () => {
     setConsoleCollapsed((prev) => !prev);
   };
@@ -214,9 +215,10 @@ const resizingRef = useRef(false);
   // ─── Monaco Setup ─────────────────────────────────────────────────────────
   const handleEditorWillMount = (monaco) => {
     monacoRef.current = monaco;
-    if (!window.__MONACO_SNIPPETS_REGISTERED__) {
+    if (!window.__MONACO_SNIPPETS_REGISTERED__ && !providerRegisteredRef.current) {
       registerSnippets(monaco);
       window.__MONACO_SNIPPETS_REGISTERED__ = true;
+      providerRegisteredRef.current = true;
     }
 
     monaco.editor.defineTheme('debugra-dark', {
@@ -379,6 +381,7 @@ const resizingRef = useRef(false);
     editorInstance.addCommand(2048 | 3, () => {
       if (executionRunRef.current) executionRunRef.current();
     });
+
 
     // Ctrl+H → Toggle Search & Replace panel
     editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
@@ -545,7 +548,11 @@ const resizingRef = useRef(false);
             onClick={() => navigate('/')}
             className="topbar-logo d-flex align-items-center gap-2"
           >
-            <img src={globalTheme === 'light' ? "/icon-light.svg" : "/icon-dark.svg"} height="20" alt="Debugra Logo" />
+            <img
+              src={globalTheme === 'light' ? '/icon-light.svg' : '/icon-dark.svg'}
+              height="20"
+              alt="Debugra Logo"
+            />
             <span className="d-none d-sm-inline">Debugra</span>
           </button>
           <div className="topbar-sep mx-2 d-none d-md-block" />
@@ -1357,7 +1364,9 @@ const resizingRef = useRef(false);
         </div>
 
         {/* Resize Handle (desktop only) */}
-        {!isMobile && !isOutputCollapsed && <div className="resize-handle" onMouseDown={handleResizeStart} />}
+        {!isMobile && !isOutputCollapsed && (
+          <div className="resize-handle" onMouseDown={handleResizeStart} />
+        )}
 
         {/* History Panel (desktop) */}
         {showHistory && user && !isMobile && (
@@ -1376,7 +1385,11 @@ const resizingRef = useRef(false);
               ? mobileTab === MOBILE_TABS.OUTPUT
                 ? { display: 'flex', width: '100%' }
                 : { display: 'none' }
-              : { width: isOutputCollapsed ? '0px' : outputWidth + 'px', minWidth: isOutputCollapsed ? '0' : '260px', overflow: 'hidden' }
+              : {
+                  width: isOutputCollapsed ? '0px' : outputWidth + 'px',
+                  minWidth: isOutputCollapsed ? '0' : '260px',
+                  overflow: 'hidden',
+                }
           }
         >
           <div className="output-tabs">
@@ -1410,8 +1423,9 @@ const resizingRef = useRef(false);
               }}
             >
               <button
-                className={`output-tab ${execution.activeOutputTab === OUTPUT_TABS.STDOUT ? 'active' : ''
-                  }`}
+                className={`output-tab ${
+                  execution.activeOutputTab === OUTPUT_TABS.STDOUT ? 'active' : ''
+                }`}
                 onClick={() => execution.setActiveOutputTab(OUTPUT_TABS.STDOUT)}
               >
                 Output
@@ -1500,12 +1514,19 @@ const resizingRef = useRef(false);
             )}
             <button
               className="output-collapse-btn"
-              onClick={() => setIsOutputCollapsed(prev => !prev)}
+              onClick={() => setIsOutputCollapsed((prev) => !prev)}
               title={isOutputCollapsed ? 'Restore Console' : 'Minimize Console'}
               aria-label={isOutputCollapsed ? 'Restore Console' : 'Minimize Console'}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points={isOutputCollapsed ? "15 18 9 12 15 6" : "6 9 12 15 18 9"} />
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <polyline points={isOutputCollapsed ? '15 18 9 12 15 6' : '6 9 12 15 18 9'} />
               </svg>
             </button>
           </div>
@@ -1777,11 +1798,10 @@ const resizingRef = useRef(false);
       {/* Real-time Democratic Vote Popup */}
       <VotePopup room={room} user={user} />
 
-
       {/* Premium Full-Screen Code Execution Loading Overlay */}
       <Loader isVisible={execution.isRunning} />
-{/* Real-time Democratic Vote Popup */}
-<VotePopup room={room} user={user} />
+      {/* Real-time Democratic Vote Popup */}
+      <VotePopup room={room} user={user} />
 
       {/* Welcome Tour for first-time users */}
       {!isMobile && (
@@ -1795,7 +1815,6 @@ const resizingRef = useRef(false);
           onSkip={tour.skipTour}
         />
       )}
-
 
       {/* Mobile Drawer */}
       <MobileDrawer
@@ -1822,7 +1841,6 @@ const resizingRef = useRef(false);
           setDrawerOpen(false);
         }}
       />
-
     </div>
   );
 }

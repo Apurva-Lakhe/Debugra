@@ -8,7 +8,7 @@ service cloud.firestore {
 
     match /rooms/{roomId} {
       // ── READ ─────────────────────────────────────────────────────────────
-      allow read: if request.auth != null && request.auth.uid in resource.data.participants;
+      allow read: if request.auth != null && request.auth.uid in resource.data.participantIds;
 
       // ── WRITE ────────────────────────────────────────────────────────────
       allow create: if request.auth != null

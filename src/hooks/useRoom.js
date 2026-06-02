@@ -161,6 +161,7 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
         code,
         language,
         activeUsers: [{ uid: user.uid, displayName }],
+        participantIds: [user.uid],
         roles: { [user.uid]: 'host' },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -223,9 +224,11 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
         const newRoles = { ...(data.roles || {}) };
         if (!newRoles[user.uid]) newRoles[user.uid] = 'viewer';
 
+        const currentParticipantIds = data.participantIds || [];
         if (!currentUsers.some((u) => u.uid === user.uid)) {
           await updateDoc(roomRef, {
             activeUsers: [...currentUsers, { uid: user.uid, displayName }],
+            participantIds: [...new Set([...currentParticipantIds, user.uid])],
             roles: newRoles,
           });
         } else if (!data.roles || !data.roles[user.uid]) {
@@ -244,7 +247,7 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
             roomId: newRoomId,
             userName: displayName,
           }),
-        }).catch(console.error);
+          }).catch(console.error);
 
         return true;
       } catch (err) {

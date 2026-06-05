@@ -5,7 +5,8 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../services/firebase';
 import Editor from '@monaco-editor/react';
 import toast from 'react-hot-toast';
-import { Eye, EyeOff, Settings } from 'lucide-react';
+import { Settings, Volume2, VolumeX, Eye, EyeOff, Menu, FolderOpen } from 'lucide-react';
+import { useTheme } from '../../context/ThemeContext';
 
 import {
   useRoom,
@@ -14,10 +15,11 @@ import {
   useEditor,
   useIsMobile,
   useAudioFeedback,
+  useWelcomeTour,
 } from '../../hooks';
 import { registerSnippets } from '../../utils/snippetsConfig';
 import { ensureEditorFontLoaded, getEditorFontFamily } from '../../utils/editorFonts';
-import { LANGUAGES } from '../../utils/languageConfig';
+import { LANGUAGES, detectLanguageByFileName } from '../../utils/languageConfig';
 import {
   LANG_FILE_NAMES,
   MOBILE_TABS,
@@ -39,9 +41,13 @@ import EditorStatusBar from './EditorStatusBar';
 import MobileBottomNav from './MobileBottomNav';
 import VideoCall from './VideoCall';
 import VotePopup from './VotePopup';
+import WelcomeTour from './WelcomeTour';
 import KeyboardShortcutsModal from './KeyboardShortcutsModal';
+import MobileDrawer from './MobileDrawer';
 import { getSessionApiKey, isSecureApiKeyStored } from '../../services/secureApiKeyStore';
 import DebugOverlay from './DebugOverlay';
+import SearchReplacePanel from './SearchReplacePanel';
+import Loader from '../Loader';
 import ComplexityOverlay from './ComplexityOverlay';
 
 function getApiKeyStatus() {
@@ -49,7 +55,23 @@ function getApiKeyStatus() {
   if (isSecureApiKeyStored()) return 'locked';
   return 'empty';
 }
-
+const REVIEWS = [
+  {
+    name: 'Alex',
+    rating: 5,
+    review: 'Excellent debugging platform. The AI explanations are incredibly helpful.',
+  },
+  {
+    name: 'Sarah',
+    rating: 5,
+    review: 'The execution visualizer helped me understand recursion much faster.',
+  },
+  {
+    name: 'John',
+    rating: 4,
+    review: 'Clean interface and smooth collaboration features.',
+  },
+];
 export default function EditorPage({ user }) {
   const isTestRoom =
     typeof window !== 'undefined' &&
@@ -57,6 +79,8 @@ export default function EditorPage({ user }) {
   const navigate = useNavigate();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const providerRegisteredRef = useRef(false);
 
   // ─── UI State ──────────────────────────────────────────────────────────────
   const [copied, setCopied] = useState(false);
@@ -64,11 +88,9 @@ export default function EditorPage({ user }) {
   const [authMode, setAuthMode] = useState('login');
   const [showHistory, setShowHistory] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  // const [showApiKey, setShowApiKey] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
-  const [showAccount, setShowAccount] = useState(false);
   const [apiKeyStatus, setApiKeyStatus] = useState(getApiKeyStatus);
   const [mobileTab, setMobileTab] = useState(MOBILE_TABS.CODE);
   const [showJoin, setShowJoin] = useState(false);
@@ -81,18 +103,20 @@ export default function EditorPage({ user }) {
   const [showSettings, setShowSettings] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [showVoiceCall, setShowVoiceCall] = useState(false);
-  const [blurIntensity, setBlurIntensity] = useState(10); //Adds State for wallpaper blur
+  const [blurIntensity, setBlurIntensity] = useState(10);
   const [showDebugOverlay, setShowDebugOverlay] = useState(false);
+  const [showSearchReplace, setShowSearchReplace] = useState(false);
   const [consoleCollapsed, setConsoleCollapsed] = useState(false);
   const [showComplexityOverlay, setShowComplexityOverlay] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const resizingRef = useRef(false);
-
   const toggleConsoleCollapsed = () => {
     setConsoleCollapsed((prev) => !prev);
   };
 
   const isMobile = useIsMobile();
   const audioFeedback = useAudioFeedback();
+  const tour = useWelcomeTour();
 
   // ─── Editor Logic ──────────────────────────────────────────────────────────
   const handleCopyOutput = async () => {
@@ -113,6 +137,40 @@ export default function EditorPage({ user }) {
     }
   };
 
+  const handleFileImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File is too large (max 5MB)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      const detectedLang = detectLanguageByFileName(file.name);
+
+      editor.loadCode(content, detectedLang);
+
+      if (detectedLang) {
+        toast.success(`Imported ${file.name} (detected ${LANGUAGES[detectedLang].name})`);
+      } else {
+        toast.success(`Imported ${file.name} as text`);
+      }
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+
+    reader.onerror = () => {
+      toast.error('Failed to read file');
+    };
+
+    reader.readAsText(file);
+  };
+
   const editor = useEditor({
     user,
     onNeedAuth: () => {
@@ -124,6 +182,21 @@ export default function EditorPage({ user }) {
 
   const vimEnabled = editor.vimEnabled;
   const setVimEnabled = editor.setVimEnabled;
+
+  const { theme: globalTheme, toggleTheme: toggleGlobalTheme } = useTheme();
+
+  // Synchronize Monaco editor theme with global light/dark theme toggle
+  useEffect(() => {
+    if (globalTheme === 'light') {
+      if (editor.theme !== 'vs') {
+        editor.setTheme('vs');
+      }
+    } else {
+      if (editor.theme === 'vs') {
+        editor.setTheme('debugra-dark');
+      }
+    }
+  }, [globalTheme, editor.theme, editor.setTheme]);
 
   const tabSizeRef = useRef(editor.tabSize);
   const vimControllerRef = useRef(null);
@@ -177,9 +250,10 @@ export default function EditorPage({ user }) {
   // ─── Monaco Setup ─────────────────────────────────────────────────────────
   const handleEditorWillMount = (monaco) => {
     monacoRef.current = monaco;
-    if (!window.__MONACO_SNIPPETS_REGISTERED__) {
+    if (!window.__MONACO_SNIPPETS_REGISTERED__ && !providerRegisteredRef.current) {
       registerSnippets(monaco);
       window.__MONACO_SNIPPETS_REGISTERED__ = true;
+      providerRegisteredRef.current = true;
     }
 
     monaco.editor.defineTheme('debugra-dark', {
@@ -343,6 +417,13 @@ export default function EditorPage({ user }) {
       if (executionRunRef.current) executionRunRef.current();
     });
 
+
+    // Ctrl+H → Toggle Search & Replace panel
+    editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+      setShowSearchReplace((v) => !v);
+    });
+
+
     const formatCurrentModel = async () => {
       const model = editorInstance.getModel();
       if (!model) return;
@@ -487,11 +568,26 @@ export default function EditorPage({ user }) {
       {/* ===== TOP BAR ===== */}
       <div className="topbar px-2 px-md-3">
         <div className="topbar-left d-flex align-items-center">
+          {isMobile && (
+            <button
+              className="mobile-drawer-toggle"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open menu"
+              aria-expanded={drawerOpen}
+              title="Menu"
+            >
+              <Menu size={18} />
+            </button>
+          )}
           <button
             onClick={() => navigate('/')}
             className="topbar-logo d-flex align-items-center gap-2"
           >
-            <img src="/icon-dark.svg" height="20" alt="Debugra Logo" />
+            <img
+              src={globalTheme === 'light' ? '/icon-light.svg' : '/icon-dark.svg'}
+              height="20"
+              alt="Debugra Logo"
+            />
             <span className="d-none d-sm-inline">Debugra</span>
           </button>
           <div className="topbar-sep mx-2 d-none d-md-block" />
@@ -554,6 +650,44 @@ export default function EditorPage({ user }) {
         </div>
 
         <div className="topbar-right d-flex align-items-center gap-2">
+          <button
+            onClick={toggleGlobalTheme}
+            className="topbar-link p-0 d-flex align-items-center justify-content-center"
+            title="Toggle theme"
+            style={{ width: '26px', height: '26px', borderRadius: '4px' }}
+          >
+            {globalTheme === 'light' ? (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            ) : (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" strokeLinecap="round" />
+                <line x1="12" y1="21" x2="12" y2="23" strokeLinecap="round" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" strokeLinecap="round" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" strokeLinecap="round" />
+                <line x1="1" y1="12" x2="3" y2="12" strokeLinecap="round" />
+                <line x1="21" y1="12" x2="23" y2="12" strokeLinecap="round" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" strokeLinecap="round" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
           {!(room.roomId || isTestRoom) && (
             <div className="room-controls d-flex align-items-center gap-2">
               <button
@@ -660,6 +794,9 @@ export default function EditorPage({ user }) {
               >
                 Account
               </button>
+              <button className="topbar-link" onClick={() => navigate('/feedback')}>
+                Feedback
+              </button>
               <div className="user-avatar">{user.displayName?.[0]?.toUpperCase() || '?'}</div>
               <span
                 className="d-none d-md-inline"
@@ -669,7 +806,7 @@ export default function EditorPage({ user }) {
               </span>
             </div>
           ) : (
-            <div className="d-flex gap-2">
+            <div className="d-none d-md-flex gap-2">
               <button
                 className="topbar-link"
                 onClick={() => {
@@ -681,7 +818,7 @@ export default function EditorPage({ user }) {
               </button>
               <button
                 className="topbar-link"
-                style={{ background: '#8b5cf6', color: 'white', border: 'none' }}
+                style={{ background: '#6d28d9', color: 'white', border: 'none' }}
                 onClick={() => {
                   setAuthMode('signup');
                   setShowAuth(true);
@@ -699,6 +836,7 @@ export default function EditorPage({ user }) {
         <div className="toolbar-left d-flex align-items-center gap-2">
           <select
             className="lang-select"
+            aria-label="Programming language"
             value={editor.language}
             onChange={(e) => editor.changeLanguage(e.target.value)}
             disabled={room.isReadOnly}
@@ -762,22 +900,13 @@ export default function EditorPage({ user }) {
         <div className="toolbar-right d-flex align-items-center gap-2">
           <div className="d-none d-md-flex align-items-center gap-2">
             <select
+              className="lang-select model-select"
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              style={{
-                background: '#2d2d2d',
-                color: '#e2e8f0',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '6px',
-                padding: '4px 8px',
-                fontSize: '0.72rem',
-                cursor: 'pointer',
-                height: '32px',
-              }}
               title="Select AI Model"
             >
-              <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
-              <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
+              <option value="llama-3.3-70b-versatile">Llama 70B</option>
+              <option value="llama-3.1-8b-instant">Llama 8B</option>
               {/* <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>*/}
             </select>
             <button
@@ -884,6 +1013,22 @@ export default function EditorPage({ user }) {
             Fix
           </button>
           <div className="d-flex align-items-center gap-1">
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleFileImport}
+              accept=".py,.js,.jsx,.ts,.tsx,.java,.cpp,.cc,.cxx,.h,.hpp,.c,.cs,.go,.rs,.rb,.php,.swift,.pl,.pm,.lua,.scala,.hs,.sql,.sh,.txt"
+            />
+            <button
+              className="toolbar-icon-btn"
+              aria-label="Import File"
+              onClick={() => fileInputRef.current?.click()}
+              title="Import file"
+              disabled={room.isReadOnly}
+            >
+              <FolderOpen size={14} />
+            </button>
             <button
               className="toolbar-icon-btn"
               aria-label="Download Code"
@@ -1131,6 +1276,39 @@ export default function EditorPage({ user }) {
                 ×
               </button>
             </div>
+            <button
+              className="editor-tab-action-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Import File"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                margin: '0 8px',
+                fontSize: '0.68rem',
+                color: 'var(--text-1)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px dashed var(--border)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--text-0)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.borderColor = 'var(--accent)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-1)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.borderColor = 'var(--border)';
+              }}
+              disabled={room.isReadOnly}
+            >
+              <FolderOpen size={11} />
+              <span>Import File</span>
+            </button>
             {room.roomId && (
               <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
                 <AudioChannel room={room} user={user} />
@@ -1207,8 +1385,16 @@ export default function EditorPage({ user }) {
                 suggestOnTriggerCharacters: true,
                 quickSuggestions: true,
                 formatOnPaste: true,
+                multiCursorModifier: 'alt',
+                columnSelection: true,
               }}
             />
+            {showSearchReplace && (
+              <SearchReplacePanel
+                editorRef={editorRef}
+                onClose={() => setShowSearchReplace(false)}
+              />
+            )}
           </div>
 
           {/* Stdin Panel */}
@@ -1263,7 +1449,9 @@ export default function EditorPage({ user }) {
         </div>
 
         {/* Resize Handle (desktop only) */}
-        {!isMobile && !isOutputCollapsed && <div className="resize-handle" onMouseDown={handleResizeStart} />}
+        {!isMobile && !isOutputCollapsed && (
+          <div className="resize-handle" onMouseDown={handleResizeStart} />
+        )}
 
         {/* History Panel (desktop) */}
         {showHistory && user && !isMobile && (
@@ -1282,7 +1470,11 @@ export default function EditorPage({ user }) {
               ? mobileTab === MOBILE_TABS.OUTPUT
                 ? { display: 'flex', width: '100%' }
                 : { display: 'none' }
-              : { width: isOutputCollapsed ? '0px' : outputWidth + 'px', minWidth: isOutputCollapsed ? '0' : '260px', overflow: 'hidden' }
+              : {
+                  width: isOutputCollapsed ? '0px' : outputWidth + 'px',
+                  minWidth: isOutputCollapsed ? '0' : '260px',
+                  overflow: 'hidden',
+                }
           }
         >
           <div className="output-tabs">
@@ -1316,8 +1508,9 @@ export default function EditorPage({ user }) {
               }}
             >
               <button
-                className={`output-tab ${execution.activeOutputTab === OUTPUT_TABS.STDOUT ? 'active' : ''
-                  }`}
+                className={`output-tab ${
+                  execution.activeOutputTab === OUTPUT_TABS.STDOUT ? 'active' : ''
+                }`}
                 onClick={() => execution.setActiveOutputTab(OUTPUT_TABS.STDOUT)}
               >
                 Output
@@ -1406,12 +1599,19 @@ export default function EditorPage({ user }) {
             )}
             <button
               className="output-collapse-btn"
-              onClick={() => setIsOutputCollapsed(prev => !prev)}
+              onClick={() => setIsOutputCollapsed((prev) => !prev)}
               title={isOutputCollapsed ? 'Restore Console' : 'Minimize Console'}
               aria-label={isOutputCollapsed ? 'Restore Console' : 'Minimize Console'}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points={isOutputCollapsed ? "15 18 9 12 15 6" : "6 9 12 15 18 9"} />
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <polyline points={isOutputCollapsed ? '15 18 9 12 15 6' : '6 9 12 15 18 9'} />
               </svg>
             </button>
           </div>
@@ -1675,13 +1875,55 @@ export default function EditorPage({ user }) {
       {showVideoCall && room.roomId && (
         <VideoCall
           roomId={room.roomId}
+          userId={user?.uid}
           userName={user?.displayName || user?.email?.split('@')[0] || 'Guest'}
           onClose={() => setShowVideoCall(false)}
         />
       )}
 
+      {/* Premium Full-Screen Code Execution Loading Overlay */}
+      <Loader isVisible={execution.isRunning} />
       {/* Real-time Democratic Vote Popup */}
       <VotePopup room={room} user={user} />
+
+      {/* Welcome Tour for first-time users */}
+      {!isMobile && (
+        <WelcomeTour
+          isActive={tour.isActive}
+          currentStep={tour.currentStep}
+          totalSteps={tour.totalSteps}
+          step={tour.step}
+          onNext={tour.nextStep}
+          onPrev={tour.prevStep}
+          onSkip={tour.skipTour}
+        />
+      )}
+
+      {/* Mobile Drawer */}
+      <MobileDrawer
+        isMobile={isMobile}
+        isOpen={drawerOpen}
+        onOpen={() => setDrawerOpen(true)}
+        onClose={() => setDrawerOpen(false)}
+        user={user}
+        editor={editor}
+        audioFeedback={audioFeedback}
+        showHistory={showHistory}
+        setShowHistory={setShowHistory}
+        onLoadCode={(code, language) => {
+          editor.loadCode(code, language);
+        }}
+        onSignIn={() => {
+          setAuthMode('login');
+          setShowAuth(true);
+          setDrawerOpen(false);
+        }}
+        onSignUp={() => {
+          setAuthMode('signup');
+          setShowAuth(true);
+          setDrawerOpen(false);
+        }}
+      />
     </div>
   );
 }

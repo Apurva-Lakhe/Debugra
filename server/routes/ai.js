@@ -57,7 +57,31 @@ function validateAiInput(req, res, next) {
   next();
 }
 
-const aiCache = new NodeCache({ stdTTL: 3600 });
+const MAX_AI_CACHE_KEYS = 500;
+const aiCache = new NodeCache({ stdTTL: 3600, maxKeys: MAX_AI_CACHE_KEYS, checkperiod: 600 });
+const aiCacheInsertionOrder = new Map();
+
+aiCache.on('del', (key) => {
+  aiCacheInsertionOrder.delete(key);
+});
+aiCache.on('expired', (key) => {
+  aiCacheInsertionOrder.delete(key);
+});
+
+function pruneAiCacheForInsert(cacheKey) {
+  if (aiCache.has(cacheKey)) {
+    return;
+  }
+
+  while (aiCache.keys().length >= MAX_AI_CACHE_KEYS) {
+    const oldestKey = aiCacheInsertionOrder.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    aiCacheInsertionOrder.delete(oldestKey);
+    aiCache.del(oldestKey);
+  }
+}
 
 function getUserGroqApiKey(req) {
   const apiKey = String(req.get('x-groq-api-key') || '').trim();
@@ -74,21 +98,27 @@ function getApiKeyFingerprint(apiKey) {
 const handleCachedRequest = (actionFn) => async (req, res, next) => {
   try {
     const apiKey = getUserGroqApiKey(req);
-    // Create a unique cache key based on route path and request body
-    const cacheKey = `${req.path}_${getApiKeyFingerprint(apiKey)}_${JSON.stringify(req.body)}`;
+    // Build a stable hash from the request body instead of embedding raw JSON
+    const bodyHash = crypto.createHash('sha256').update(JSON.stringify(req.body)).digest('hex');
+    const cacheKey = `${req.path}_${getApiKeyFingerprint(apiKey)}_${bodyHash}`;
     
     // Check if we have a cached response
-   // const cachedResponse = aiCache.get(cacheKey);
-   // if (cachedResponse) {
-   //   console.log(`[Cache Hit] Serving cached AI response for ${req.path}`);
-   //   return res.json(cachedResponse);
-   // }
+    const cachedResponse = aiCache.get(cacheKey);
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
     
     // Process request if not cached
     const result = await actionFn(req.body, apiKey);
     
-    // Cache the successful result
+    // Cache the successful result — stats tracking for eviction awareness
+    const stats = aiCache.getStats();
+    if (stats.evictions > 0) {
+      console.log(`[Cache] Evictions: ${stats.evictions}, Keys: ${Object.keys(aiCache.keys()).length}`);
+    }
+    pruneAiCacheForInsert(cacheKey);
     aiCache.set(cacheKey, result);
+    aiCacheInsertionOrder.set(cacheKey, Date.now());
     
     res.json(result);
   } catch (err) {

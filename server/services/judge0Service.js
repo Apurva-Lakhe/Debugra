@@ -30,6 +30,8 @@ const COMPILER_OPTIONS = {
   'gcc-13.2.0-c': '-std=c11',
 };
 
+const MAX_OUTPUT_LENGTH = 100000;
+
 async function executeCode(sourceCode, languageId, stdin = '') {
   const compiler = WANDBOX_COMPILERS[languageId];
   if (!compiler) {
@@ -54,6 +56,11 @@ async function executeCode(sourceCode, languageId, stdin = '') {
     const compileError = data.compiler_error || '';
     const runtimeError = data.program_error || '';
     const exitCode = data.status != null ? parseInt(data.status, 10) : -1;
+
+    const stdout = (data.program_output || '').slice(0, MAX_OUTPUT_LENGTH);
+    const compileError = (data.compiler_error || '').slice(0, MAX_OUTPUT_LENGTH);
+    const runtimeError = (data.program_error || '').slice(0, MAX_OUTPUT_LENGTH);
+    const exitCode = parseInt(data.status ?? '0');
 
     // Compile error takes priority, then runtime error, then exit code
     const hasCompileError = compileError.trim().length > 0;
@@ -85,4 +92,6 @@ async function executeCode(sourceCode, languageId, stdin = '') {
   }
 }
 
-module.exports = { executeCode };
+const SUPPORTED_LANGUAGE_IDS = new Set(Object.keys(WANDBOX_COMPILERS).map(Number));
+
+module.exports = { executeCode, SUPPORTED_LANGUAGE_IDS };

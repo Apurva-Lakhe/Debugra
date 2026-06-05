@@ -10,6 +10,7 @@ import {
 import { auth, googleProvider } from '../../services/firebase';
 import toast from 'react-hot-toast';
 import './LandingPage.css';
+import { useTheme } from '../../context/ThemeContext';
 
 // ─── Inline SVG Icons ─────────────────────────────────────────────────────────
 const IconBolt = () => (
@@ -245,33 +246,12 @@ const LANGUAGES = [
   'SQL',
   'Bash',
 ];
-<a href="#reviews" className="landing-nav-link">
-  Reviews
-</a>
 const STATS = [
   { value: '18+', label: 'Languages' },
   { value: '5', label: 'AI Features' },
   { value: '∞', label: 'Free Forever' },
   { value: '0', label: 'Setup Required' },
 ];
-const REVIEWS = [
-  {
-    name: 'Alex',
-    rating: 5,
-    review: 'The AI debugging tools helped me identify issues much faster.',
-  },
-  {
-    name: 'Priya',
-    rating: 5,
-    review: 'Real-time collaboration is smooth and easy to use.',
-  },
-  {
-    name: 'Rahul',
-    rating: 4,
-    review: 'Clean interface and excellent language support.',
-  },
-];
-
 const FAQ_ITEMS = [
   {
     question: 'What is Debugra?',
@@ -312,10 +292,27 @@ const TAG_COLORS = {
   Editor: { bg: 'rgba(59,130,246,0.12)', color: '#60a5fa' },
   Engine: { bg: 'rgba(249,115,22,0.12)', color: '#fb923c' },
 };
-
+const REVIEWS = [
+  {
+    name: 'Alex',
+    rating: 5,
+    review: 'Excellent debugging platform. The AI explanations are incredibly helpful.',
+  },
+  {
+    name: 'Sarah',
+    rating: 5,
+    review: 'The execution visualizer helped me understand recursion much faster.',
+  },
+  {
+    name: 'John',
+    rating: 4,
+    review: 'Clean interface and smooth collaboration features.',
+  },
+];
 export default function LandingPage() {
   const navigate = useNavigate();
   const featuresCarouselRef = useRef(null);
+  const { theme, toggleTheme } = useTheme();
   const [showLogin, setShowLogin] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -358,6 +355,20 @@ export default function LandingPage() {
     };
   }, []);
 
+  // Back-to-top visibility — show after scrolling 400 px
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 400);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Reset confirm-password state whenever the user toggles login ↔ sign-up
+  useEffect(() => {
+    setConfirmPassword('');
+    setShowConfirmPassword(false);
+    setShowPassword(false);
+  }, [isSignUp]);
+
   const scrollFeaturesCarousel = (direction) => {
     const carousel = featuresCarouselRef.current;
     if (!carousel) return;
@@ -378,6 +389,9 @@ export default function LandingPage() {
     }
   };
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const handleGoogle = async () => {
     try {
@@ -391,6 +405,10 @@ export default function LandingPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSignUp && password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
     setLoading(true);
     try {
       if (isSignUp) {
@@ -413,19 +431,13 @@ export default function LandingPage() {
       {/* ===== NAVBAR ===== */}
       <nav className="landing-nav">
         <div className="landing-nav-left">
-          <img src="/icon-dark.svg" height="26" alt="Debugra Logo" />
+          <img
+            src={theme === 'light' ? '/icon-light.svg' : '/icon-dark.svg'}
+            height="26"
+            alt="Debugra Logo"
+          />
           <span className="landing-logo">Debugra</span>
-          <span
-            style={{
-              fontSize: '0.6rem',
-              color: '#888888',
-              fontFamily: 'JetBrains Mono, monospace',
-              marginLeft: '4px',
-              paddingBottom: '1px',
-            }}
-          >
-            v1.0
-          </span>
+          <span className="landing-version-badge">v1.0</span>
         </div>
         <div className="landing-nav-right desktop-only">
           <a href="#features" className="landing-nav-link">
@@ -437,6 +449,12 @@ export default function LandingPage() {
           <a href="#faq" className="landing-nav-link">
             FAQ
           </a>
+          <button
+            onClick={() => navigate('/feedback')}
+            className="landing-nav-link nav-link-button"
+          >
+            Feedback
+          </button>
           <button onClick={() => setShowLogin(true)} className="landing-btn-outline">
             Log In
           </button>
@@ -449,36 +467,115 @@ export default function LandingPage() {
           >
             Sign Up Free
           </button>
-        </div>
-        <button
-          className="mobile-menu-btn mobile-only"
-          aria-label="Toggle mobile menu"
-          aria-expanded={mobileMenu}
-          onClick={() => setMobileMenu(!mobileMenu)}
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#e2e8f0"
-            strokeWidth="2"
-            strokeLinecap="round"
+          <button
+            onClick={toggleTheme}
+            className="landing-btn-outline p-0 d-flex align-items-center justify-content-center"
+            title="Toggle theme"
+            style={{ width: '36px', height: '36px', borderRadius: '8px' }}
           >
-            {mobileMenu ? (
-              <>
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </>
+            {theme === 'light' ? (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
             ) : (
-              <>
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" strokeLinecap="round" />
+                <line x1="12" y1="21" x2="12" y2="23" strokeLinecap="round" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" strokeLinecap="round" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" strokeLinecap="round" />
+                <line x1="1" y1="12" x2="3" y2="12" strokeLinecap="round" />
+                <line x1="21" y1="12" x2="23" y2="12" strokeLinecap="round" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" strokeLinecap="round" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" strokeLinecap="round" />
+              </svg>
             )}
-          </svg>
-        </button>
+          </button>
+        </div>
+
+        <div className="d-flex align-items-center gap-2 mobile-only">
+          <button
+            onClick={toggleTheme}
+            className="landing-btn-outline p-0 d-flex align-items-center justify-content-center"
+            title="Toggle theme"
+            style={{ width: '36px', height: '36px', borderRadius: '8px' }}
+          >
+            {theme === 'light' ? (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            ) : (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" strokeLinecap="round" />
+                <line x1="12" y1="21" x2="12" y2="23" strokeLinecap="round" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" strokeLinecap="round" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" strokeLinecap="round" />
+                <line x1="1" y1="12" x2="3" y2="12" strokeLinecap="round" />
+                <line x1="21" y1="12" x2="23" y2="12" strokeLinecap="round" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" strokeLinecap="round" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+          <button
+            className="mobile-menu-btn"
+            aria-label="Toggle mobile menu"
+            aria-expanded={mobileMenu}
+            onClick={() => setMobileMenu(!mobileMenu)}
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              {mobileMenu ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </>
+              )}
+            </svg>
+          </button>
+        </div>
       </nav>
 
       {mobileMenu && (
@@ -496,6 +593,15 @@ export default function LandingPage() {
           <a href="#faq" className="mobile-dropdown-link" onClick={() => setMobileMenu(false)}>
             FAQ
           </a>
+          <button
+            className="mobile-dropdown-link"
+            onClick={() => {
+              setMobileMenu(false);
+              navigate('/feedback');
+            }}
+          >
+            Feedback
+          </button>
           <button
             onClick={() => {
               setShowLogin(true);
@@ -598,7 +704,7 @@ export default function LandingPage() {
                   <span className="preview-tag">Explain</span>
                   <span
                     className="preview-tag"
-                    style={{ color: '#dcdcaa', borderColor: 'rgba(220,220,170,0.3)' }}
+                    style={{ color: 'var(--warning)', borderColor: 'var(--border)' }}
                   >
                     Fix
                   </span>
@@ -654,7 +760,7 @@ export default function LandingPage() {
                     }}
                   >
                     <div className="preview-success-badge">✓ SUCCESS</div>
-                    <div className="text-light mt-2">[0, 1]</div>
+                    <div className="mt-2">[0, 1]</div>
                     <div className="mt-2" style={{ color: '#6a6a6a', fontSize: '0.68rem' }}>
                       Time: 0.03s
                     </div>
@@ -787,15 +893,6 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
-<section id="reviews" className="landing-section container">
-  <div className="section-header">
-    <p className="section-eyebrow">Community</p>
-    <h2 className="section-title">Feedback & Reviews</h2>
-    <p className="section-subtitle">
-      Hear what developers think about Debugra and share your own experience.
-    </p>
-  </div>
-
       {/* ===== FAQ ===== */}
       <section id="faq" className="landing-section container">
         <div className="section-header">
@@ -836,7 +933,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-  <div className="reviews-grid">
+      {/* <div className="reviews-grid">
     {REVIEWS.map((review, index) => (
       <div key={index} className="review-card">
         <div className="review-stars">
@@ -852,50 +949,54 @@ export default function LandingPage() {
         </span>
       </div>
     ))}
-  </div>
+  </div> */}
+      <div className="reviews-carousel">
+        <div className="reviews-track">
+          {[...REVIEWS, ...REVIEWS].map((review, index) => (
+            <div key={index} className="review-card">
+              <div className="review-stars">{'★'.repeat(review.rating)}</div>
 
-  <div className="feedback-form-card">
-    <h3 style={{ marginBottom: '16px' }}>Share Your Feedback</h3>
+              <p className="review-text">&quot;{review.review}&quot;</p>
 
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        toast.success('Thank you for your feedback!');
-      }}
-    >
-      <input
-        type="text"
-        placeholder="Your Name"
-        className="modal-input"
-        required
-      />
+              <span className="review-author">— {review.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      <select className="modal-input" required>
-        <option value="">Select Rating</option>
-        <option value="5">★★★★★ (5)</option>
-        <option value="4">★★★★☆ (4)</option>
-        <option value="3">★★★☆☆ (3)</option>
-        <option value="2">★★☆☆☆ (2)</option>
-        <option value="1">★☆☆☆☆ (1)</option>
-      </select>
+      <div className="feedback-form-card">
+        <h3 style={{ marginBottom: '16px' }}>Share Your Feedback</h3>
 
-      <textarea
-        placeholder="Tell us about your experience..."
-        className="modal-input"
-        rows="4"
-        required
-      />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            toast.success('Thank you for your feedback!');
+          }}
+        >
+          <input type="text" placeholder="Your Name" className="modal-input" required />
 
-      <button
-        type="submit"
-        className="landing-btn-primary"
-        style={{ width: 'fit-content' }}
-      >
-        Submit Feedback
-      </button>
-    </form>
-  </div>
-</section>
+          <select className="modal-input" required>
+            <option value="">Select Rating</option>
+            <option value="5">★★★★★ (5)</option>
+            <option value="4">★★★★☆ (4)</option>
+            <option value="3">★★★☆☆ (3)</option>
+            <option value="2">★★☆☆☆ (2)</option>
+            <option value="1">★☆☆☆☆ (1)</option>
+          </select>
+
+          <textarea
+            placeholder="Tell us about your experience..."
+            className="modal-input"
+            rows="4"
+            required
+          />
+
+          <button type="submit" className="landing-btn-primary" style={{ width: 'fit-content' }}>
+            Submit Feedback
+          </button>
+        </form>
+      </div>
+      {/* </section> */}
       {/* ===== CTA ===== */}
       <section className="landing-cta-section">
         <div className="cta-glow" />
@@ -941,70 +1042,48 @@ export default function LandingPage() {
       </section>
 
       {/* ===== FOOTER ===== */}
-<<<<<<< HEAD
-<footer className="landing-footer">
-  <div className="d-flex align-items-center gap-2 justify-content-center mb-1">
-    <img src="/icon-dark.svg" height="14" alt="Debugra Logo" />
-    <span style={{ fontWeight: 600, color: '#e2e8f0' }}>Debugra</span>
-  </div>
-
-  <p style={{ margin: 0, fontSize: '0.72rem', color: '#4a4a6a' }}>
-    © {new Date().getFullYear()} Debugra · Built for Hackathon SVKM 2026 ·{" "}
-    <a
-      href="https://github.com/omkhandare55/Debugra"
-      style={{ color: '#6a6a8a', textDecoration: 'none' }}
-    >
-      GitHub
-    </a>
-  </p>
-</footer>
-
-=======
       <footer className="landing-footer">
-        <div className="footer-inner">
-          <div className="footer-col footer-brand-col">
-            <div className="footer-brand">
-              <img src="/icon-dark.svg" height="20" alt="Debugra Logo" />
-              <span>Debugra</span>
-            </div>
-            <p className="footer-tagline">AI-powered code debugging and real-time collaboration platform.</p>
-          </div>
-          <div className="footer-col">
-            <h4 className="footer-heading">Product</h4>
-            <a href="#features" className="footer-link">
-              <span className="footer-link-label">Features</span>
-              <span className="footer-link-desc">Explore capabilities</span>
-            </a>
-            <a href="#languages" className="footer-link">
-              <span className="footer-link-label">Languages</span>
-              <span className="footer-link-desc">Supported languages</span>
-            </a>
-            <a href="/editor" className="footer-link">
-              <span className="footer-link-label">Editor</span>
-              <span className="footer-link-desc">Start coding</span>
-            </a>
-          </div>
-          <div className="footer-col">
-            <h4 className="footer-heading">Connect</h4>
-            <a href="https://github.com/omkhandare55/Debugra" target="_blank" rel="noopener noreferrer" className="footer-link">
-              <span className="footer-link-label">GitHub</span>
-              <span className="footer-link-desc">Source code &amp; issues</span>
-            </a>
-            <a href="/CONTRIBUTING.md" className="footer-link">
-              <span className="footer-link-label">Contributing</span>
-              <span className="footer-link-desc">Guide &amp; guidelines</span>
-            </a>
-            <a href="/SECURITY.md" className="footer-link">
-              <span className="footer-link-label">Security</span>
-              <span className="footer-link-desc">Report vulnerabilities</span>
-            </a>
-          </div>
+        <div className="d-flex align-items-center gap-2 justify-content-center mb-1">
+          <img
+            src={theme === 'light' ? '/icon-light.svg' : '/icon-dark.svg'}
+            height="14"
+            alt="Debugra Logo"
+          />
+          <span className="landing-footer-logo-text">Debugra</span>
         </div>
-        <div className="footer-bottom">
-          <p>Built for Hackathon SVKM 2026 · debugra.tech · Free &amp; Open Source</p>
-        </div>
+
+        <p style={{ margin: 0, fontSize: '0.72rem', color: '#4a4a6a' }}>
+          © {new Date().getFullYear()} Debugra · Built for Hackathon SVKM 2026 ·{' '}
+          <a
+            href="https://github.com/omkhandare55/Debugra"
+            style={{ color: '#6a6a8a', textDecoration: 'none' }}
+          >
+            GitHub
+          </a>
+        </p>
       </footer>
->>>>>>> db0fa05 (feat: enhance footer with interactive hover effects and structured link columns)
+
+      {/* ===== BACK TO TOP ===== */}
+      {showBackToTop && (
+        <button
+          className="back-to-top-btn"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Back to top"
+          title="Scroll back to top"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          >
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
+      )}
 
       {/* ===== LOGIN MODAL ===== */}
       {showLogin && (
@@ -1082,15 +1161,45 @@ export default function LandingPage() {
                 <button
                   type="button"
                   className="password-toggle"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                   onClick={() => setShowPassword(!showPassword)}
                 >
+                  {/* Icon shows current state: EyeOff = hidden, Eye = visible (#513) */}
                   {showPassword ? (
-                    <EyeOff size={18} strokeWidth={2} />
-                  ) : (
                     <Eye size={18} strokeWidth={2} />
+                  ) : (
+                    <EyeOff size={18} strokeWidth={2} />
                   )}
                 </button>
               </div>
+              {isSignUp && (
+                <div className="password-wrapper">
+                  <input
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    aria-label="Confirm Password"
+                    placeholder="Confirm Password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    className="modal-input"
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    aria-label={
+                      showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'
+                    }
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? (
+                      <Eye size={18} strokeWidth={2} />
+                    ) : (
+                      <EyeOff size={18} strokeWidth={2} />
+                    )}
+                  </button>
+                </div>
+              )}
             </form>
 
             <p className="modal-toggle">

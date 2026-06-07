@@ -1602,7 +1602,24 @@ export default function EditorPage({ user }) {
                 response={ai.aiResponse}
                 language={editor.language}
                 onApplyFix={(code) => {
-                  editor.setCode(code);
+                  if (editorRef.current) {
+                    const model = editorRef.current.getModel();
+                    if (model) {
+                      editorRef.current.pushUndoStop();
+                      editorRef.current.executeEdits('ai-fix', [
+                        {
+                          range: model.getFullModelRange(),
+                          text: code,
+                          forceMoveMarkers: true,
+                        },
+                      ]);
+                      editorRef.current.pushUndoStop();
+                    } else {
+                      editor.setCode(code);
+                    }
+                  } else {
+                    editor.setCode(code);
+                  }
                   toast.success('Solution applied!');
                 }}
               />

@@ -23,7 +23,6 @@
     "prettier": "^3.2.5",
     "vite": "^8.0.10",
     "vitest": "^4.0.15"
-    "vite": "^8.0.10"
   },
   "dependencies": {
     "@emnapi/core": "^1.10.0",

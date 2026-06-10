@@ -63,11 +63,7 @@ export default function App() {
               <Route
                 path="/voice-test"
                 element={
-                  <VideoCall
-                    roomId={'__playwright_test'}
-                    userName={'Playwright'}
-                    audioOnly
-                  />
+                  <VideoCall roomId={'__playwright_test'} userName={'Playwright'} audioOnly />
                 }
               />
 
@@ -83,7 +79,6 @@ export default function App() {
 
           {/* Footer is safely placed inside the flex wrapper, outside <Routes> so it renders globally */}
           <Footer />
-
         </div>
       </BrowserRouter>
     </ThemeProvider>

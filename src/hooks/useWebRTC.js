@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import Peer from 'simple-peer';
 import {
   collection,
@@ -30,6 +30,9 @@ export function useWebRTC(roomId, user) {
   const streamRef = useRef(null);
   const unsubscribeRef = useRef(null);
   const heartbeatRef = useRef(null);
+  const sweepIntervalRef = useRef(null);
+  const sweepTimeoutRef = useRef(null);
+  const signalsUnsubscribeRef = useRef(null);
 
   const joinCall = async () => {
     try {
@@ -90,7 +93,7 @@ export function useWebRTC(roomId, user) {
         where('createdAt', '>', signalCutoff),
         orderBy('createdAt', 'asc')
       );
-      onSnapshot(q, (snapshot) => {
+      signalsUnsubscribeRef.current = onSnapshot(q, (snapshot) => {
         snapshot.docChanges().forEach(async (change) => {
           if (change.type === 'added') {
             const data = change.doc.data();
@@ -107,14 +110,25 @@ export function useWebRTC(roomId, user) {
       });
 
       // Periodic sweep for stale signals left by disconnected peers
-      const sweepInterval = setInterval(async () => {
-        const sweepCutoff = Timestamp.fromMillis(Date.now() - STALE_SIGNAL_MINUTES * 60 * 1000);
-        const staleSignals = query(signalsRef, where('createdAt', '<', sweepCutoff));
-        const snapshot = await getDocs(staleSignals);
-        snapshot.docs.forEach((d) => deleteDoc(d.ref));
-      }, 2 * 60 * 1000);
+      sweepIntervalRef.current = setInterval(
+        async () => {
+          const sweepCutoff = Timestamp.fromMillis(Date.now() - STALE_SIGNAL_MINUTES * 60 * 1000);
+          const staleSignals = query(signalsRef, where('createdAt', '<', sweepCutoff));
+          const snapshot = await getDocs(staleSignals);
+          snapshot.docs.forEach((d) => deleteDoc(d.ref));
+        },
+        2 * 60 * 1000
+      );
       // Store sweep handle for cleanup
-      setTimeout(() => clearInterval(sweepInterval), 30 * 60 * 1000);
+      sweepTimeoutRef.current = setTimeout(
+        () => {
+          if (sweepIntervalRef.current) {
+            clearInterval(sweepIntervalRef.current);
+            sweepIntervalRef.current = null;
+          }
+        },
+        30 * 60 * 1000
+      );
     } catch (err) {
       console.error(err);
       toast.error('Could not access microphone.');
@@ -192,6 +206,18 @@ export function useWebRTC(roomId, user) {
   const leaveCall = async () => {
     if (heartbeatRef.current) clearInterval(heartbeatRef.current);
     if (unsubscribeRef.current) unsubscribeRef.current();
+    if (signalsUnsubscribeRef.current) {
+      signalsUnsubscribeRef.current();
+      signalsUnsubscribeRef.current = null;
+    }
+    if (sweepIntervalRef.current) {
+      clearInterval(sweepIntervalRef.current);
+      sweepIntervalRef.current = null;
+    }
+    if (sweepTimeoutRef.current) {
+      clearTimeout(sweepTimeoutRef.current);
+      sweepTimeoutRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
@@ -236,3 +262,6 @@ export function useWebRTC(roomId, user) {
 
   return { inCall, joinCall, leaveCall, isMuted, toggleMute, peers };
 }
+
+
+

@@ -1,11 +1,11 @@
-import { useRef, useState, useEffect } from 'react';
+﻿import { useRef, useState, useEffect } from 'react';
 import { createMonacoVimController } from '../../utils/monacoVim';
 import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../services/firebase';
 import Editor from '@monaco-editor/react';
 import toast from 'react-hot-toast';
-import { Settings, Volume2, VolumeX, Eye, EyeOff, Menu } from 'lucide-react';
+import { Settings, Volume2, VolumeX, Eye, EyeOff, Menu, FolderOpen } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../hooks';
 import { registerSnippets } from '../../utils/snippetsConfig';
 import { ensureEditorFontLoaded, getEditorFontFamily } from '../../utils/editorFonts';
-import { LANGUAGES } from '../../utils/languageConfig';
+import { LANGUAGES, detectLanguageByFileName } from '../../utils/languageConfig';
 import {
   LANG_FILE_NAMES,
   MOBILE_TABS,
@@ -46,9 +46,9 @@ import KeyboardShortcutsModal from './KeyboardShortcutsModal';
 import MobileDrawer from './MobileDrawer';
 import { getSessionApiKey, isSecureApiKeyStored } from '../../services/secureApiKeyStore';
 import DebugOverlay from './DebugOverlay';
+import SearchReplacePanel from './SearchReplacePanel';
 import Loader from '../Loader';
 import ComplexityOverlay from './ComplexityOverlay';
-
 
 function getApiKeyStatus() {
   if (getSessionApiKey()) return 'unlocked';
@@ -79,34 +79,37 @@ export default function EditorPage({ user }) {
   const navigate = useNavigate();
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const providerRegisteredRef = useRef(false);
 
   // ─── UI State ──────────────────────────────────────────────────────────────
   const [copied, setCopied] = useState(false);
-const [showAuth, setShowAuth] = useState(false);
-const [authMode, setAuthMode] = useState('login');
-const [showHistory, setShowHistory] = useState(false);
-const [chatOpen, setChatOpen] = useState(false);
-const [showApiKey, setShowApiKey] = useState(false);
-const [showAccount, setShowAccount] = useState(false);
-const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
-const [apiKeyStatus, setApiKeyStatus] = useState(getApiKeyStatus);
-const [mobileTab, setMobileTab] = useState(MOBILE_TABS.CODE);
-const [showJoin, setShowJoin] = useState(false);
-const [joinId, setJoinId] = useState('');
-const [joinPassword, setJoinPassword] = useState('');
-const [roomPassword, setRoomPassword] = useState('');
-const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
-const [outputWidth, setOutputWidth] = useState(420);
-const [minimapSide, setMinimapSide] = useState('right');
-const [showSettings, setShowSettings] = useState(false);
-const [showVideoCall, setShowVideoCall] = useState(false);
-const [showVoiceCall, setShowVoiceCall] = useState(false);
-const [blurIntensity, setBlurIntensity] = useState(10);
-const [showDebugOverlay, setShowDebugOverlay] = useState(false);
-const [consoleCollapsed, setConsoleCollapsed] = useState(false);
-const [showComplexityOverlay, setShowComplexityOverlay] = useState(false);
-const [drawerOpen, setDrawerOpen] = useState(false);
-const resizingRef = useRef(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [showHistory, setShowHistory] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
+  const [apiKeyStatus, setApiKeyStatus] = useState(getApiKeyStatus);
+  const [mobileTab, setMobileTab] = useState(MOBILE_TABS.CODE);
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinId, setJoinId] = useState('');
+  const [joinPassword, setJoinPassword] = useState('');
+  const [roomPassword, setRoomPassword] = useState('');
+  const [isOutputCollapsed, setIsOutputCollapsed] = useState(false);
+  const [outputWidth, setOutputWidth] = useState(420);
+  const [minimapSide, setMinimapSide] = useState('right');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [showVoiceCall, setShowVoiceCall] = useState(false);
+  const [blurIntensity, setBlurIntensity] = useState(10);
+  const [showDebugOverlay, setShowDebugOverlay] = useState(false);
+  const [showSearchReplace, setShowSearchReplace] = useState(false);
+  const [consoleCollapsed, setConsoleCollapsed] = useState(false);
+  const [showComplexityOverlay, setShowComplexityOverlay] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const resizingRef = useRef(false);
   const toggleConsoleCollapsed = () => {
     setConsoleCollapsed((prev) => !prev);
   };
@@ -132,6 +135,40 @@ const resizingRef = useRef(false);
     } catch (err) {
       toast.error('Failed to copy output');
     }
+  };
+
+  const handleFileImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File is too large (max 5MB)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      const detectedLang = detectLanguageByFileName(file.name);
+
+      editor.loadCode(content, detectedLang);
+
+      if (detectedLang) {
+        toast.success(`Imported ${file.name} (detected ${LANGUAGES[detectedLang].name})`);
+      } else {
+        toast.success(`Imported ${file.name} as text`);
+      }
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+
+    reader.onerror = () => {
+      toast.error('Failed to read file');
+    };
+
+    reader.readAsText(file);
   };
 
   const editor = useEditor({
@@ -213,9 +250,10 @@ const resizingRef = useRef(false);
   // ─── Monaco Setup ─────────────────────────────────────────────────────────
   const handleEditorWillMount = (monaco) => {
     monacoRef.current = monaco;
-    if (!window.__MONACO_SNIPPETS_REGISTERED__) {
+    if (!window.__MONACO_SNIPPETS_REGISTERED__ && !providerRegisteredRef.current) {
       registerSnippets(monaco);
       window.__MONACO_SNIPPETS_REGISTERED__ = true;
+      providerRegisteredRef.current = true;
     }
 
     monaco.editor.defineTheme('debugra-dark', {
@@ -378,7 +416,14 @@ const resizingRef = useRef(false);
     editorInstance.addCommand(2048 | 3, () => {
       if (executionRunRef.current) executionRunRef.current();
     });
-    
+
+
+    // Ctrl+H → Toggle Search & Replace panel
+    editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+      setShowSearchReplace((v) => !v);
+    });
+
+
     const formatCurrentModel = async () => {
       const model = editorInstance.getModel();
       if (!model) return;
@@ -538,7 +583,11 @@ const resizingRef = useRef(false);
             onClick={() => navigate('/')}
             className="topbar-logo d-flex align-items-center gap-2"
           >
-            <img src="/icon-dark.svg" height="20" alt="Debugra Logo" />
+            <img
+              src={globalTheme === 'light' ? '/icon-light.svg' : '/icon-dark.svg'}
+              height="20"
+              alt="Debugra Logo"
+            />
             <span className="d-none d-sm-inline">Debugra</span>
           </button>
           <div className="topbar-sep mx-2 d-none d-md-block" />
@@ -769,7 +818,7 @@ const resizingRef = useRef(false);
               </button>
               <button
                 className="topbar-link"
-                style={{ background: '#8b5cf6', color: 'white', border: 'none' }}
+                style={{ background: '#6d28d9', color: 'white', border: 'none' }}
                 onClick={() => {
                   setAuthMode('signup');
                   setShowAuth(true);
@@ -787,6 +836,7 @@ const resizingRef = useRef(false);
         <div className="toolbar-left d-flex align-items-center gap-2">
           <select
             className="lang-select"
+            aria-label="Programming language"
             value={editor.language}
             onChange={(e) => editor.changeLanguage(e.target.value)}
             disabled={room.isReadOnly}
@@ -963,6 +1013,22 @@ const resizingRef = useRef(false);
             Fix
           </button>
           <div className="d-flex align-items-center gap-1">
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleFileImport}
+              accept=".py,.js,.jsx,.ts,.tsx,.java,.cpp,.cc,.cxx,.h,.hpp,.c,.cs,.go,.rs,.rb,.php,.swift,.pl,.pm,.lua,.scala,.hs,.sql,.sh,.txt"
+            />
+            <button
+              className="toolbar-icon-btn"
+              aria-label="Import File"
+              onClick={() => fileInputRef.current?.click()}
+              title="Import file"
+              disabled={room.isReadOnly}
+            >
+              <FolderOpen size={14} />
+            </button>
             <button
               className="toolbar-icon-btn"
               aria-label="Download Code"
@@ -1210,6 +1276,39 @@ const resizingRef = useRef(false);
                 ×
               </button>
             </div>
+            <button
+              className="editor-tab-action-btn"
+              onClick={() => fileInputRef.current?.click()}
+              title="Import File"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                margin: '0 8px',
+                fontSize: '0.68rem',
+                color: 'var(--text-1)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px dashed var(--border)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--text-0)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.borderColor = 'var(--accent)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-1)';
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.borderColor = 'var(--border)';
+              }}
+              disabled={room.isReadOnly}
+            >
+              <FolderOpen size={11} />
+              <span>Import File</span>
+            </button>
             {room.roomId && (
               <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto' }}>
                 <AudioChannel room={room} user={user} />
@@ -1286,8 +1385,16 @@ const resizingRef = useRef(false);
                 suggestOnTriggerCharacters: true,
                 quickSuggestions: true,
                 formatOnPaste: true,
+                multiCursorModifier: 'alt',
+                columnSelection: true,
               }}
             />
+            {showSearchReplace && (
+              <SearchReplacePanel
+                editorRef={editorRef}
+                onClose={() => setShowSearchReplace(false)}
+              />
+            )}
           </div>
 
           {/* Stdin Panel */}
@@ -1342,7 +1449,9 @@ const resizingRef = useRef(false);
         </div>
 
         {/* Resize Handle (desktop only) */}
-        {!isMobile && !isOutputCollapsed && <div className="resize-handle" onMouseDown={handleResizeStart} />}
+        {!isMobile && !isOutputCollapsed && (
+          <div className="resize-handle" onMouseDown={handleResizeStart} />
+        )}
 
         {/* History Panel (desktop) */}
         {showHistory && user && !isMobile && (
@@ -1361,7 +1470,11 @@ const resizingRef = useRef(false);
               ? mobileTab === MOBILE_TABS.OUTPUT
                 ? { display: 'flex', width: '100%' }
                 : { display: 'none' }
-              : { width: isOutputCollapsed ? '0px' : outputWidth + 'px', minWidth: isOutputCollapsed ? '0' : '260px', overflow: 'hidden' }
+              : {
+                  width: isOutputCollapsed ? '0px' : outputWidth + 'px',
+                  minWidth: isOutputCollapsed ? '0' : '260px',
+                  overflow: 'hidden',
+                }
           }
         >
           <div className="output-tabs">
@@ -1395,8 +1508,9 @@ const resizingRef = useRef(false);
               }}
             >
               <button
-                className={`output-tab ${execution.activeOutputTab === OUTPUT_TABS.STDOUT ? 'active' : ''
-                  }`}
+                className={`output-tab ${
+                  execution.activeOutputTab === OUTPUT_TABS.STDOUT ? 'active' : ''
+                }`}
                 onClick={() => execution.setActiveOutputTab(OUTPUT_TABS.STDOUT)}
               >
                 Output
@@ -1485,12 +1599,19 @@ const resizingRef = useRef(false);
             )}
             <button
               className="output-collapse-btn"
-              onClick={() => setIsOutputCollapsed(prev => !prev)}
+              onClick={() => setIsOutputCollapsed((prev) => !prev)}
               title={isOutputCollapsed ? 'Restore Console' : 'Minimize Console'}
               aria-label={isOutputCollapsed ? 'Restore Console' : 'Minimize Console'}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points={isOutputCollapsed ? "15 18 9 12 15 6" : "6 9 12 15 18 9"} />
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <polyline points={isOutputCollapsed ? '15 18 9 12 15 6' : '6 9 12 15 18 9'} />
               </svg>
             </button>
           </div>
@@ -1754,19 +1875,16 @@ const resizingRef = useRef(false);
       {showVideoCall && room.roomId && (
         <VideoCall
           roomId={room.roomId}
+          userId={user?.uid}
           userName={user?.displayName || user?.email?.split('@')[0] || 'Guest'}
           onClose={() => setShowVideoCall(false)}
         />
       )}
 
-      {/* Real-time Democratic Vote Popup */}
-      <VotePopup room={room} user={user} />
-
-
       {/* Premium Full-Screen Code Execution Loading Overlay */}
       <Loader isVisible={execution.isRunning} />
-{/* Real-time Democratic Vote Popup */}
-<VotePopup room={room} user={user} />
+      {/* Real-time Democratic Vote Popup */}
+      <VotePopup room={room} user={user} />
 
       {/* Welcome Tour for first-time users */}
       {!isMobile && (
@@ -1780,7 +1898,6 @@ const resizingRef = useRef(false);
           onSkip={tour.skipTour}
         />
       )}
-
 
       {/* Mobile Drawer */}
       <MobileDrawer
@@ -1807,7 +1924,7 @@ const resizingRef = useRef(false);
           setDrawerOpen(false);
         }}
       />
-
     </div>
   );
 }
+

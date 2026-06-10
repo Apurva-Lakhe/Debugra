@@ -143,7 +143,6 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
     }
   }, [roomId, user, roomData, language]);
 
-
   // ─── Create room ────────────────────────────────────────────────────────────
   const createRoom = useCallback(
     async (roomPassword = '') => {
@@ -161,6 +160,7 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
         code,
         language,
         activeUsers: [{ uid: user.uid, displayName }],
+        participantIds: [user.uid],
         roles: { [user.uid]: 'host' },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -223,9 +223,11 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
         const newRoles = { ...(data.roles || {}) };
         if (!newRoles[user.uid]) newRoles[user.uid] = 'viewer';
 
+        const currentParticipantIds = data.participantIds || [];
         if (!currentUsers.some((u) => u.uid === user.uid)) {
           await updateDoc(roomRef, {
             activeUsers: [...currentUsers, { uid: user.uid, displayName }],
+            participantIds: [...new Set([...currentParticipantIds, user.uid])],
             roles: newRoles,
           });
         } else if (!data.roles || !data.roles[user.uid]) {
@@ -264,6 +266,21 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
       });
     }
   }, [user, roomId, joinRoom]);
+
+  // ─── Presence cleanup on browser tab/window close ──────────────────────────
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (roomId && user && roomData) {
+        const currentUsers = roomData.activeUsers || [];
+        const newUsers = currentUsers.filter((u) => u.uid !== user.uid);
+        updateDoc(doc(db, 'rooms', roomId), { activeUsers: newUsers }).catch(() => {});
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [roomId, user, roomData]);
 
   // (Legacy access control methods removed for simpler role system)
   const requestAccess = useCallback(() => {}, []);
@@ -475,11 +492,13 @@ export function useRoom({ user, code, language, stdinValue, setCode, setLanguage
     if (!roomId || !roomData?.activeVote) return;
     const vote = roomData.activeVote;
     const activeCount = roomData.activeUsers?.length || 1;
-    
+
     if (vote.status === 'voting' && vote.initiatorUid === user?.uid) {
       // If the remaining approvals exceed the new 50% threshold
       if (vote.approvals?.length > activeCount / 2) {
-        updateDoc(doc(db, 'rooms', roomId), { 'activeVote.status': 'approved' }).catch(console.error);
+        updateDoc(doc(db, 'rooms', roomId), { 'activeVote.status': 'approved' }).catch(
+          console.error
+        );
       }
     }
   }, [roomId, roomData?.activeVote, roomData?.activeUsers, user?.uid]);

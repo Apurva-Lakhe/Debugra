@@ -12,6 +12,7 @@ export default function ContributorsPage() {
   const [repoStats, setRepoStats] = useState({});
   const [showLogin, setShowLogin] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchGitHubData = async () => {
@@ -20,6 +21,10 @@ export default function ContributorsPage() {
           fetch('https://api.github.com/repos/vijaypatil477/Debugra/contributors'),
           fetch('https://api.github.com/repos/vijaypatil477/Debugra'),
         ]);
+
+        if (!contributorsRes.ok || !repoRes.ok) {
+          throw new Error('Failed to fetch GitHub data');
+        }
 
         const contributorsData = await contributorsRes.json();
         const repoData = await repoRes.json();
@@ -30,6 +35,7 @@ export default function ContributorsPage() {
 
         setRepoStats(repoData);
       } catch (error) {
+        setError('Unable to load contributors right now.');
         console.error('Error fetching GitHub data:', error);
       } finally {
         setLoading(false);
@@ -68,7 +74,13 @@ export default function ContributorsPage() {
           <Link to="/contributors" className="landing-nav-link">
             Contributors
           </Link>
-          <button onClick={() => setShowLogin(true)} className="landing-btn-outline">
+          <button
+            onClick={() => {
+              setIsSignUp(false);
+              setShowLogin(true);
+            }}
+            className="landing-btn-outline"
+          >
             Log In
           </button>
           <button
@@ -128,7 +140,7 @@ export default function ContributorsPage() {
               </div>
 
               <div>
-                <h3>{repoStats.open_issues_count || '...'}</h3>
+                <h3>{repoStats.open_issues_count ?? '...'}</h3>
                 <p>Open Issues & PRs</p>
               </div>
             </div>
@@ -139,7 +151,7 @@ export default function ContributorsPage() {
               </div>
 
               <div>
-                <h3>{repoStats.stargazers_count || '...'}</h3>
+                <h3>{repoStats.stargazers_count ?? '...'}</h3>
                 <p>GitHub Stars</p>
               </div>
             </div>
@@ -159,6 +171,8 @@ export default function ContributorsPage() {
 
         {loading ? (
           <div className="contributors-loading">Loading contributors...</div>
+        ) : error ? (
+          <div className="contributors-loading">{error}</div>
         ) : (
           <div className="contributors-grid-pro">
             {contributors.map((contributor) => (
@@ -259,7 +273,10 @@ export default function ContributorsPage() {
       {showLogin && (
         <AuthModal
           initialMode={isSignUp ? 'signup' : 'login'}
-          onClose={() => setShowLogin(false)}
+          onClose={() => {
+            setShowLogin(false);
+            setIsSignUp(false);
+          }}
         />
       )}
     </div>

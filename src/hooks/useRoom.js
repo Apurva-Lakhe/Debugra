@@ -136,8 +136,8 @@ export function useRoom({
     const cursorsRef = collection(db, 'rooms', roomId, 'cursors');
     const unsub = onSnapshot(cursorsRef, (snapshot) => {
       const cursors = {};
-      snapshot.forEach((doc) => {
-        const data = doc.data();
+      snapshot.forEach((cursorDoc) => {
+        const data = cursorDoc.data();
         if (data.uid !== user?.uid) {
           cursors[data.uid] = data;
         }

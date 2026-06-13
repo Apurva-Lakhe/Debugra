@@ -562,6 +562,17 @@ export default function EditorPage({ user }) {
   }, [isOutputCollapsed]);
 
   // ─── Render Remote Cursors ────────────────────────────────────────────────
+  const escapeForCssContent = (str) => {
+    if (!str) return '';
+    return str
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'") 
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\A ')
+      .replace(/\r/g, '')
+      .slice(0, 30);
+  };
+
   useEffect(() => {
     const editorInstance = editorRef.current;
     const monaco = monacoRef.current;
@@ -589,6 +600,7 @@ export default function EditorPage({ user }) {
         styleEl.id = `style-${c.uid}`;
         document.head.appendChild(styleEl);
       }
+      const escapedDisplayName = escapeForCssContent(c.displayName);
       styleEl.innerHTML = `
         .${className} {
           border-left: 2px solid ${userColor} !important;
@@ -596,7 +608,7 @@ export default function EditorPage({ user }) {
           position: relative;
         }
         .${className}::after {
-          content: '${c.displayName}';
+          content: '${escapedDisplayName}';
           position: absolute;
           bottom: 100%;
           left: 0;
@@ -641,6 +653,17 @@ export default function EditorPage({ user }) {
       });
     };
   }, [room.remoteCursors]);
+
+  // Cleanup all cursor style elements on unmount
+  useEffect(() => {
+    return () => {
+      const styleElements = document.querySelectorAll('[id^="style-"]');
+      styleElements.forEach((el) => el.remove());
+      if (editorRef.current) {
+        editorRef.current.deltaDecorations(remoteCursorDecorationsRef.current, []);
+      }
+    };
+  }, []);
 
   // ─── Output Pane Resize ───────────────────────────────────────────────────
   const handleResizeStart = (e) => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   signInWithPopup,
   signInWithEmailAndPassword,
@@ -8,11 +8,19 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../../services/firebase';
-import { X, LogIn, UserPlus, Globe } from 'lucide-react';
+import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-export default function AuthModal({ onClose, initialMode = 'login' }) {
-  const [isLogin, setIsLogin] = useState(initialMode === 'login');
+export default function AuthModal({ onClose, initialMode = 'login', mode }) {
+  const [isLogin, setIsLogin] = useState((mode || initialMode) === 'login');
+
+  // support older callers that pass `mode` prop
+  // If `mode` prop is provided, derive initial isLogin from it on first render.
+  useEffect(() => {
+    if (mode) {
+      setIsLogin(mode === 'login');
+    }
+  }, [mode]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -26,6 +34,8 @@ export default function AuthModal({ onClose, initialMode = 'login' }) {
       {
         uid: user.uid,
         displayName: user.displayName || name || 'Anonymous',
+        // store a lowercase copy to support case-insensitive checks
+        displayNameLower: (user.displayName || name || 'Anonymous').toLowerCase(),
         email: user.email,
         photoURL: user.photoURL || null,
         createdAt: new Date(),
@@ -56,6 +66,21 @@ export default function AuthModal({ onClose, initialMode = 'login' }) {
       if (isLogin) {
         result = await signInWithEmailAndPassword(auth, email, password);
       } else {
+        // validate display name and check for duplicates (case-insensitive)
+        if (!name || !name.trim()) {
+          toast.error('Please enter a display name');
+          setLoading(false);
+          return;
+        }
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const q = await getDocs(
+          query(collection(db, 'users'), where('displayNameLower', '==', name.trim().toLowerCase()))
+        );
+        if (q && !q.empty) {
+          toast.error('This username is unavailable');
+          setLoading(false);
+          return;
+        }
         result = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(result.user, { displayName: name });
       }
@@ -63,7 +88,18 @@ export default function AuthModal({ onClose, initialMode = 'login' }) {
       toast.success('Welcome!');
       onClose();
     } catch (err) {
-      toast.error(err.message);
+      const code = err?.code || '';
+      if (code === 'auth/email-already-in-use') {
+        toast.error('An account with this email already exists');
+      } else if (code === 'auth/weak-password') {
+        toast.error('Password is too weak (min 6 characters)');
+      } else if (code === 'auth/wrong-password') {
+        toast.error('Wrong password');
+      } else if (code === 'auth/user-not-found') {
+        toast.error('No account found for that email');
+      } else {
+        toast.error(err.message || 'An error occurred');
+      }
     } finally {
       setLoading(false);
     }

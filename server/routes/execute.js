@@ -1,12 +1,74 @@
 const express = require('express');
 const router = express.Router();
 const NodeCache = require('node-cache');
-const { executeCode } = require('../services/judge0Service');
+const crypto = require('crypto');
+const { rateLimit } = require('express-rate-limit');
+const { executeCode, SUPPORTED_LANGUAGE_IDS } = require('../services/judge0Service');
 
-// Initialize cache with 5 minutes TTL for code execution
-const executeCache = new NodeCache({ stdTTL: 300 });
+const MAX_SOURCE_CODE_LENGTH = 100000;
+const MAX_STDIN_LENGTH = 10000;
 
-router.post('/', async (req, res, next) => {
+const MAX_EXECUTION_CACHE_KEYS = 100;
+
+// Initialize cache with 5 minutes TTL and a hard entry cap.
+const executeCache = new NodeCache({
+  stdTTL: 300,
+  maxKeys: MAX_EXECUTION_CACHE_KEYS,
+  checkperiod: 60,
+});
+const executeCacheInsertionOrder = new Map();
+// Remove expired/deleted entries from the insertion order tracker to prevent memory leaks
+executeCache.on('del', (key) => {
+  executeCacheInsertionOrder.delete(key);
+});
+executeCache.on('expired', (key) => {
+  executeCacheInsertionOrder.delete(key);
+});
+
+function buildCacheKey(languageId, stdin, sourceCode) {
+  const payload = JSON.stringify({
+    languageId,
+    stdin: stdin || '',
+    sourceCode,
+  });
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
+
+function pruneExecutionCacheForInsert(cacheKey) {
+  if (executeCache.has(cacheKey)) {
+    return;
+  }
+
+  while (executeCache.keys().length >= MAX_EXECUTION_CACHE_KEYS) {
+    const oldestKey = executeCacheInsertionOrder.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    executeCacheInsertionOrder.delete(oldestKey);
+    executeCache.del(oldestKey);
+  }
+}
+
+function cacheExecutionResult(cacheKey, result) {
+  pruneExecutionCacheForInsert(cacheKey);
+  executeCache.set(cacheKey, result);
+  executeCacheInsertionOrder.set(cacheKey, Date.now());
+}
+
+// Stricter rate limiter specific to /api/execute
+const executeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many execution requests, please try again later.',
+    });
+  },
+});
+
+router.post('/', executeLimiter, async (req, res, next) => {
   try {
     const { source_code, language_id, stdin } = req.body;
 
@@ -14,21 +76,46 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'source_code and language_id are required' });
     }
 
-    const cacheKey = `exec_${language_id}_${stdin || ''}_${source_code}`;
+    if (typeof source_code !== 'string' || (stdin !== undefined && typeof stdin !== 'string')) {
+      return res.status(400).json({ error: 'source_code and stdin must be strings' });
+    }
+
+    const parsedId = Number(language_id);
+    if (!Number.isInteger(parsedId) || !SUPPORTED_LANGUAGE_IDS.has(parsedId)) {
+      return res.status(400).json({
+        error: `Unsupported language_id: ${language_id}. Supported IDs: ${[...SUPPORTED_LANGUAGE_IDS].join(', ')}`,
+      });
+    }
+
+    if (Buffer.byteLength(source_code, 'utf-8') > MAX_SOURCE_CODE_LENGTH) {
+      return res.status(413).json({
+        error: `source_code exceeds maximum length of ${MAX_SOURCE_CODE_LENGTH} bytes`,
+      });
+    }
+
+    const normalizedStdin = stdin || '';
+
+    if (Buffer.byteLength(normalizedStdin, 'utf-8') > MAX_STDIN_LENGTH) {
+      return res.status(413).json({
+        error: `stdin exceeds maximum length of ${MAX_STDIN_LENGTH} bytes`,
+      });
+    }
+
+    const cacheKey = buildCacheKey(parsedId, normalizedStdin, source_code);
     const cachedResult = executeCache.get(cacheKey);
-    
+
     if (cachedResult) {
       console.log('[Cache Hit] Serving cached execution result');
       return res.json(cachedResult);
     }
 
-    const result = await executeCode(source_code, language_id, stdin || '');
-    
+    const result = await executeCode(source_code, parsedId, normalizedStdin);
+
     // Only cache successful requests
     if (result && result.status) {
-      executeCache.set(cacheKey, result);
+      cacheExecutionResult(cacheKey, result);
     }
-    
+
     res.json(result);
   } catch (err) {
     console.error('Judge0 error:', err.response?.data || err.message);
@@ -37,3 +124,5 @@ router.post('/', async (req, res, next) => {
 });
 
 module.exports = router;
+
+

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import './LandingPage.css';
+import AuthModal from '../Auth/AuthModal';
 
 export default function ContributorsPage() {
   const navigate = useNavigate();
@@ -9,6 +10,8 @@ export default function ContributorsPage() {
   const [contributors, setContributors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [repoStats, setRepoStats] = useState({});
+  const [showLogin, setShowLogin] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
 
   useEffect(() => {
     const fetchGitHubData = async () => {
@@ -253,6 +256,12 @@ export default function ContributorsPage() {
           </a>
         </p>
       </footer>
+      {showLogin && (
+        <AuthModal
+          initialMode={isSignUp ? 'signup' : 'login'}
+          onClose={() => setShowLogin(false)}
+        />
+      )}
     </div>
   );
 }
